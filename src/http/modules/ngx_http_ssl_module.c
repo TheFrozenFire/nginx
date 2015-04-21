@@ -232,6 +232,34 @@ static ngx_command_t  ngx_http_ssl_commands[] = {
       NGX_HTTP_SRV_CONF_OFFSET,
       offsetof(ngx_http_ssl_srv_conf_t, stapling_verify),
       NULL },
+    
+    { ngx_string("ssl_config_audit_stapling"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_http_ssl_srv_conf_t, config_audit_stapling),
+      NULL },
+
+    { ngx_string("ssl_config_audit_stapling_file"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_http_ssl_srv_conf_t, config_audit_stapling_file),
+      NULL },
+
+    { ngx_string("ssl_config_audit_stapling_responder"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_str_slot,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_http_ssl_srv_conf_t, config_audit_stapling_responder),
+      NULL },
+
+    { ngx_string("ssl_config_audit_stapling_verify"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_http_ssl_srv_conf_t, config_audit_stapling_verify),
+      NULL },
 
       ngx_null_command
 };
@@ -516,6 +544,8 @@ ngx_http_ssl_create_srv_conf(ngx_conf_t *cf)
      *     sscf->shm_zone = NULL;
      *     sscf->stapling_file = { 0, NULL };
      *     sscf->stapling_responder = { 0, NULL };
+     *     sscf->config_audit_stapling_file = { 0, NULL };
+     *     sscf->config_audit_stapling_responder = { 0, NULL };
      */
 
     sscf->enable = NGX_CONF_UNSET;
@@ -530,6 +560,8 @@ ngx_http_ssl_create_srv_conf(ngx_conf_t *cf)
     sscf->session_ticket_keys = NGX_CONF_UNSET_PTR;
     sscf->stapling = NGX_CONF_UNSET;
     sscf->stapling_verify = NGX_CONF_UNSET;
+    sscf->config_audit_stapling = NGX_CONF_UNSET;
+    sscf->config_audit_stapling_verify = NGX_CONF_UNSET;
 
     return sscf;
 }
@@ -593,6 +625,15 @@ ngx_http_ssl_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_str_value(conf->stapling_file, prev->stapling_file, "");
     ngx_conf_merge_str_value(conf->stapling_responder,
                          prev->stapling_responder, "");
+    
+    ngx_conf_merge_value(conf->config_audit_stapling,
+                         prev->config_audit_stapling, 0);
+    ngx_conf_merge_value(conf->config_audit_stapling_verify,
+                         prev->config_audit_stapling_verify, 0);
+    ngx_conf_merge_str_value(conf->config_audit_stapling_file,
+                             prev->config_audit_stapling_file, "");
+    ngx_conf_merge_str_value(conf->config_audit_stapling_responder,
+                             prev->config_audit_stapling_responder, "");
 
     conf->ssl.log = cf->log;
 
@@ -770,6 +811,18 @@ ngx_http_ssl_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
         }
 
     }
+    
+    if (conf->config_audit_stapling) {
+    
+        if (ngx_ssl_config_audit_stapling(cf, &conf->ssl,
+                                          &conf->config_audit_stapling_file,
+                                          &conf->config_audit_stapling_responder,
+                                          conf->config_audit_stapling_verify)
+            != NGX_OK)
+        {
+            return NGX_CONF_ERROR;
+        }
+    }
 
     return NGX_CONF_OK;
 }
@@ -946,14 +999,25 @@ ngx_http_ssl_init(ngx_conf_t *cf)
 
         sscf = cscfp[s]->ctx->srv_conf[ngx_http_ssl_module.ctx_index];
 
-        if (sscf->ssl.ctx == NULL || !sscf->stapling) {
+        if (sscf->ssl.ctx == NULL || ( !sscf->stapling
+                                        && !sscf->config_audit_stapling )) {
             continue;
         }
 
         clcf = cscfp[s]->ctx->loc_conf[ngx_http_core_module.ctx_index];
 
-        if (ngx_ssl_stapling_resolver(cf, &sscf->ssl, clcf->resolver,
-                                      clcf->resolver_timeout)
+        if (sscf->stapling && ngx_ssl_stapling_resolver(cf, &sscf->ssl,
+                                                        clcf->resolver,
+                                                        clcf->resolver_timeout)
+            != NGX_OK)
+        {
+            return NGX_ERROR;
+        }
+        
+        if (sscf->config_audit_stapling
+            && ngx_ssl_config_audit_stapling_resolver(cf, &sscf->ssl,
+                                                      clcf->resolver,
+                                                      clcf->resolver_timeout)
             != NGX_OK)
         {
             return NGX_ERROR;
