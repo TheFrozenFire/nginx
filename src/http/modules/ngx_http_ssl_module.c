@@ -999,25 +999,14 @@ ngx_http_ssl_init(ngx_conf_t *cf)
 
         sscf = cscfp[s]->ctx->srv_conf[ngx_http_ssl_module.ctx_index];
 
-        if (sscf->ssl.ctx == NULL || ( !sscf->stapling
-                                        && !sscf->config_audit_stapling )) {
+        if (sscf->ssl.ctx == NULL || !sscf->stapling) {
             continue;
         }
 
         clcf = cscfp[s]->ctx->loc_conf[ngx_http_core_module.ctx_index];
 
-        if (sscf->stapling && ngx_ssl_stapling_resolver(cf, &sscf->ssl,
-                                                        clcf->resolver,
-                                                        clcf->resolver_timeout)
-            != NGX_OK)
-        {
-            return NGX_ERROR;
-        }
-        
-        if (sscf->config_audit_stapling
-            && ngx_ssl_config_audit_stapling_resolver(cf, &sscf->ssl,
-                                                      clcf->resolver,
-                                                      clcf->resolver_timeout)
+        if (ngx_ssl_stapling_resolver(cf, &sscf->ssl, clcf->resolver,
+                                      clcf->resolver_timeout)
             != NGX_OK)
         {
             return NGX_ERROR;

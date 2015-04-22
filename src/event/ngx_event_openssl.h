@@ -210,6 +210,7 @@ extern int  ngx_ssl_session_cache_index;
 extern int  ngx_ssl_session_ticket_keys_index;
 extern int  ngx_ssl_certificate_index;
 extern int  ngx_ssl_stapling_index;
+extern int  ngx_ssl_config_audit_stapling_index;
 
 
 #endif /* _NGX_EVENT_OPENSSL_H_INCLUDED_ */
